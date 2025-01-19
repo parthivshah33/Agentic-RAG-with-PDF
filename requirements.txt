@@ -1,0 +1,14 @@
+python-dotenv==1.0.0
+langchain
+langchain-core
+langchain_community
+langchain-pinecone
+langchain-google-genai
+langsmith
+pinecone
+tiktoken==0.8.0
+groq
+pydantic==2.10.4
+
+streamlit
+
