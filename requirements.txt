@@ -11,4 +11,4 @@ groq
 pydantic==2.10.4
 langchain_groq 
 streamlit
-
+langgraph
