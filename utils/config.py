@@ -1,9 +1,8 @@
-from dotenv import load_dotenv
-import os
-import groq
-import pinecone
 from langchain.prompts import PromptTemplate
-
+import pinecone
+import groq
+import os
+from dotenv import load_dotenv
 # Load the .env file
 load_dotenv()
 
@@ -36,14 +35,14 @@ RAG_prompt = PromptTemplate(
             '''
 )
 
+
 class Config():
     """Base configurations and environment variables"""
-    llamaCloud_api_key = os.getenv('LLAMACLOUD_API_KEY')
     groq_api_key = os.getenv('GROQ_API_KEY')
     pinecone_api_key = os.getenv('PINECONE_API_KEY')
-    pinecone_index_name = os.getenv('PINECONDE_INDEX_NAME')
     gemini_api_key = os.getenv('GEMINI_API_KEY')
-    
+    embedding_model = os.getenv('EMBEDDING_MODEL')
+    embedding_dim: int = int(os.getenv('EMBEDDING_DIM'))
     RAG_prompt = RAG_prompt
-    
-    
+    llm = os.getenv('LLM')
+    temprature = os.getenv('TEMPRATURE')
