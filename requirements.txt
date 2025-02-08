@@ -13,3 +13,4 @@ langchain_groq
 streamlit
 langgraph
 pypdf
+streamlit_pdf_viewer
