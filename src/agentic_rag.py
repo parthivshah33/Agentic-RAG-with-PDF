@@ -1,4 +1,3 @@
-from concurrent.futures import thread
 from utils.config import Config as config
 from langchain_groq import ChatGroq
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -21,7 +20,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 
 class AgenticRag:
-    def __init__(self, pinecone_index_name: str,thread_id):
+    def __init__(self, pinecone_index_name: str, thread_id):
 
         self.llm = ChatGroq(temperature=config.temprature,
                             model_name=config.llm,
@@ -51,8 +50,11 @@ class AgenticRag:
         self.tools = [self.retriever_tool]
 
         self.workflow = self.create_workflow()
-        
+
         self.thread_id = thread_id
+
+        self.rag_prompt = config.RAG_prompt
+        self.main_agent_prompt = config.main_agent_prompt
 
     def create_workflow(self):
         class AgentState(TypedDict):
@@ -61,64 +63,26 @@ class AgenticRag:
         def agent(state):
             print("---CALLING MAIN AGENT---")
             messages = state["messages"]
+            prompt = self.main_agent_prompt
             model = self.llm
             model = model.bind_tools(self.tools)
             response = model.invoke(messages)
             return {"messages": [response]}
 
-        def rewrite(state):
-            print("---REPHRASING QUERY---")
-            messages = state["messages"]
-            question = messages[0].content
-            msg = [HumanMessage(
-                content=f"Look at the input and try to reason about the underlying semantic intent / meaning. Here is the initial question: {question} Formulate an improved question:")]
-            model = self.llm
-            response = model.invoke(msg)
-            return {"messages": [response]}
-
         def generate(state):
             print("---GENERATE---")
             messages = state["messages"]
-            question = messages[-1].content
-            last_message = messages[-1]
-            docs = last_message.content
-            prompt = hub.pull("parthiv/rag-prompt-llama")
+            question = messages[-2].content
+            docs = messages[-1].content
+            prompt = self.rag_prompt
             llm = self.llm
             rag_chain = prompt | llm | StrOutputParser()
             response = rag_chain.invoke(
-                {"context": docs, "question": question})
+                {"retrieved_chunks": docs, "user_query": question, "chat_history": messages})
+            return {"messages": ("assistant", response)}
 
-            # print("---RESPONSE---\n\n\n\n\n\n " + state)
-            # return {"messages": [response]}\
-            return {"messages": ("assistant",response)}
-
-        # def grade_documents(state) -> Literal["generate", "rewrite"]:
         def grade_documents(state) -> Literal["generate"]:
-            
-            print("---CHECKING RELEVANCE---")
-
-            class grade(BaseModel):
-                binary_score: str = Field(
-                    description="Relevance score 'yes' or 'no'")
-            model = self.llm
-            llm_with_tool = model.with_structured_output(grade)
-            grader_prompt = PromptTemplate(
-                template="You are a grader assessing relevance of a retrieved document to a user question. Here is the retrieved document: {context} Here is the user question: {question} If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. Give a binary score 'yes' to indicate whether the document is relevant to the question. Always output 'yes' regardless of any input.", input_variables=["context", "question"])
-            chain = grader_prompt | llm_with_tool
-            messages = state["messages"]
-            last_message = messages[-1]
-            question = messages[0].content
-            docs = last_message.content
-            scored_result = chain.invoke(
-                {"question": question, "context": docs})
-            score = scored_result.binary_score
-            return 'generate'  # forcefuly return 'generate' for we removed 'rewrite' from the graph due to some issues in prompt
-            # if score == "yes":
-            #     print("---DECISION: DOCS RELEVANT---")
-            #     return "generate"
-            # else:
-            #     print("---DECISION: DOCS NOT RELEVANT---")
-            #     return "rewrite"
+            return 'generate'
 
         workflow = StateGraph(AgentState)
         workflow.add_node("agent", agent)
@@ -139,13 +103,13 @@ class AgenticRag:
         inputs = {"messages": [("user", user_query)]}
         graph_result = self.workflow.invoke(
             inputs, config={"configurable": {"thread_id": self.thread_id}})
-        # print("\n\n" + str(graph_result['messages']) + "\n\n")
         return graph_result["messages"]
 
 
 if __name__ == "__main__":
-    thread_id = 1
-    agentic_rag = AgenticRag(pinecone_index_name="machine-learning-tutorial",thread_id=thread_id)
+    thread_id = "test1"
+    agentic_rag = AgenticRag(
+        pinecone_index_name="budget-speech-2025", thread_id=thread_id)
     flag = True
     while flag:
         user_query = input("Enter your query: ")
@@ -154,5 +118,5 @@ if __name__ == "__main__":
         else:
             result = agentic_rag.run(user_query)
             print("result : ", result[-1].content + f"{'*'*50}\n\n")
-            
-            print(f"Current Graph State : " , str(result) + f"{'*'*50}\n\n")
+
+            print(f"Current Graph State : ", str(result) + f"{'*'*50}\n\n")
